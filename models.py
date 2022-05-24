@@ -14,7 +14,45 @@ __all__ = [
     'deit_tiny_distilled_patch16_224', 'deit_small_distilled_patch16_224',
     'deit_base_distilled_patch16_224', 'deit_base_patch16_384',
     'deit_base_distilled_patch16_384',
+    'masked_deit_small_patch16_224'
 ]
+
+
+try:
+    from torch import _assert
+except ImportError:
+    def _assert(condition: bool, message: str):
+        assert condition, message
+
+
+class MaskedVisionTransformer(VisionTransformer):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.keep_ratio = 1.0
+
+    def set_keep_ratio(self, kr):
+        _assert(kr > 0 and kr <= 1.0, f"Keep_ratio must be within (0, 1]")
+        self.keep_ratio = kr
+
+    def forward_features(self, x):
+        x = self.patch_embed(x)
+        cls_token = self.cls_token.expand(x.shape[0], -1, -1)  # stole cls_tokens impl from Phil Wang, thanks
+        if self.dist_token is None:
+            x = torch.cat((cls_token, x), dim=1)
+        else:
+            x = torch.cat((cls_token, self.dist_token.expand(x.shape[0], -1, -1), x), dim=1)
+        x = self.pos_drop(x + self.pos_embed)
+
+        if self.training and self.keep_ratio < 1.0:
+            x=x[:, torch.randperm(x.size(1))[:int(x.size(1)*self.keep_ratio)]]
+
+        x = self.blocks(x)
+        x = self.norm(x)
+        if self.dist_token is None:
+            return self.pre_logits(x[:, 0])
+        else:
+            return x[:, 0], x[:, 1]
+
 
 
 class DistilledVisionTransformer(VisionTransformer):
@@ -83,6 +121,20 @@ def deit_small_patch16_224(pretrained=False, **kwargs):
     if pretrained:
         checkpoint = torch.hub.load_state_dict_from_url(
             url="https://dl.fbaipublicfiles.com/deit/deit_small_patch16_224-cd65a155.pth",
+            map_location="cpu", check_hash=True
+        )
+        model.load_state_dict(checkpoint["model"])
+    return model
+
+@register_model
+def masked_deit_small_patch16_224(pretrained=False, **kwargs):
+    model = MaskedVisionTransformer(
+        patch_size=16, embed_dim=384, depth=12, num_heads=6, mlp_ratio=4, qkv_bias=True,
+        norm_layer=partial(nn.LayerNorm, eps=1e-6), **kwargs)
+    model.default_cfg = _cfg()
+    if pretrained:
+        checkpoint = torch.hub.load_state_dict_from_url(
+            url="https://dl.fbaipublicfiles.com/deit/masked_deit_small_patch16_224-cd65a155.pth",
             map_location="cpu", check_hash=True
         )
         model.load_state_dict(checkpoint["model"])
