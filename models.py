@@ -44,7 +44,15 @@ class MaskedVisionTransformer(VisionTransformer):
         x = self.pos_drop(x + self.pos_embed)
 
         if self.training and self.keep_ratio < 1.0:
-            x=x[:, torch.randperm(x.size(1))[:int(x.size(1)*self.keep_ratio)]]
+            num_patches = self.patch_embed.num_patches
+            keep_index = torch.randperm(num_patches)[:int(num_patches * self.keep_ratio)]
+            if self.dist_token is None:
+                num_tokens = 1
+            else:
+                num_tokens = 2
+            keep_index = keep_index + num_tokens
+            keep_index = torch.cat((torch.arange(num_tokens), keep_index))
+            x = x[:, keep_index]
 
         x = self.blocks(x)
         x = self.norm(x)
