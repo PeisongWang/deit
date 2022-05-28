@@ -28,7 +28,11 @@ except ImportError:
 class MaskedVisionTransformer(VisionTransformer):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.force_mask = False
         self.keep_ratio = 1.0
+
+    def set_force_mask(self, force):
+        self.force_mask = force
 
     def set_keep_ratio(self, kr):
         _assert(kr > 0 and kr <= 1.0, f"Keep_ratio must be within (0, 1]")
@@ -43,7 +47,7 @@ class MaskedVisionTransformer(VisionTransformer):
             x = torch.cat((cls_token, self.dist_token.expand(x.shape[0], -1, -1), x), dim=1)
         x = self.pos_drop(x + self.pos_embed)
 
-        if self.training and self.keep_ratio < 1.0:
+        if (self.force_mask or self.training) and self.keep_ratio < 1.0:
             num_patches = self.patch_embed.num_patches
             keep_index = torch.randperm(num_patches)[:int(num_patches * self.keep_ratio)]
             if self.dist_token is None:
