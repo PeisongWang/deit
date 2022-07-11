@@ -197,7 +197,7 @@ def get_sinusoid_encoding_table(n_position, d_hid):
     sinusoid_table[:, 0::2] = np.sin(sinusoid_table[:, 0::2]) # dim 2i 
     sinusoid_table[:, 1::2] = np.cos(sinusoid_table[:, 1::2]) # dim 2i+1 
 
-    return torch.FloatTensor(sinusoid_table).unsqueeze(0) 
+    return torch.FloatTensor(sinusoid_table).unsqueeze(0).cuda()
 
 
 class Attention(nn.Module):
