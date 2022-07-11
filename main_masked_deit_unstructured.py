@@ -37,15 +37,18 @@ def get_args_parser():
     parser.add_argument('--unscale-lr', action='store_true')
 
     # Model parameters
-    parser.add_argument('--model', default='masked_deit_base_patch16_224', type=str, metavar='MODEL',
+    parser.add_argument('--model', default='unstructured_masked_deit_base_patch16_224', type=str, metavar='MODEL',
                         help='Name of model to train')
+    parser.add_argument('--keep-index', default='', type=str, metavar='INDEX',
+                        help='keep index (numpy file)')
+    parser.add_argument('--force-mask', action='store_true')
     parser.add_argument('--input-size', default=224, type=int, help='images input size')
 
     parser.add_argument('--drop', type=float, default=0.0, metavar='PCT',
                         help='Dropout rate (default: 0.)')
     parser.add_argument('--drop-path', type=float, default=0.1, metavar='PCT',
                         help='Drop path rate (default: 0.1)')
-    parser.add_argument('--keep-ratio', type=float, default=1.0, metavar='PCT',
+    parser.add_argument('--keep-ratio', type=float, default=0.5, metavar='PCT',
                         help='Masked Deit Keep ratio (default: 1.)')
 
     parser.add_argument('--model-ema', action='store_true')
@@ -53,6 +56,8 @@ def get_args_parser():
     parser.set_defaults(model_ema=True)
     parser.add_argument('--model-ema-decay', type=float, default=0.99996, help='')
     parser.add_argument('--model-ema-force-cpu', action='store_true', default=False, help='')
+
+    parser.add_argument('--sinusoid-pos-emb', action='store_true', default=False)
 
     # Optimizer parameters
     parser.add_argument('--opt', default='adamw', type=str, metavar='OPTIMIZER',
@@ -260,7 +265,18 @@ def main(args):
         drop_rate=args.drop,
         drop_path_rate=args.drop_path,
         drop_block_rate=None,
+        use_learnable_pos_emb=(not args.sinusoid_pos_emb)
     )
+
+    ## settings for masked training
+    if args.keep_index:
+        keep_index = np.load(args.keep_index)
+        model.set_keep_ratio(args.keep_ratio, keep_index)
+    else:
+        keep_index = model.set_keep_ratio(args.keep_ratio)
+        keep_index = keep_index.cpu().numpy()
+        np.save('unstructured_keep_index.npy', keep_index)
+    model.set_force_mask(args.force_mask)
 
                     
     if args.finetune:
@@ -385,6 +401,7 @@ def main(args):
     )
 
     output_dir = Path(args.output_dir)
+
     if args.resume:
         if args.resume.startswith('https'):
             checkpoint = torch.hub.load_state_dict_from_url(
@@ -409,7 +426,6 @@ def main(args):
     print(f"Start training for {args.epochs} epochs")
     start_time = time.time()
     max_accuracy = 0.0
-    model_without_ddp.set_keep_ratio(args.keep_ratio)
     for epoch in range(args.start_epoch, args.epochs):
         if args.distributed:
             data_loader_train.sampler.set_epoch(epoch)

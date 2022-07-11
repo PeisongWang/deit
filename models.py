@@ -3,6 +3,7 @@
 import torch
 import torch.nn as nn
 from functools import partial
+import numpy as np
 
 from timm.models.vision_transformer import VisionTransformer, _cfg
 from timm.models.registry import register_model
@@ -14,7 +15,7 @@ __all__ = [
     'deit_tiny_distilled_patch16_224', 'deit_small_distilled_patch16_224',
     'deit_base_distilled_patch16_224', 'deit_base_patch16_384',
     'deit_base_distilled_patch16_384',
-    'masked_deit_small_patch16_224', 'random_masked_deit_small_patch16_224'
+    'masked_deit_small_patch16_224', 'unstructured_masked_deit_small_patch16_224', 'structured_masked_deit_small_patch16_224'
 ]
 
 
@@ -25,12 +26,12 @@ except ImportError:
         assert condition, message
 
 
-class RandomMaskedVisionTransformer(VisionTransformer):
+class StructuredMaskedVisionTransformer(VisionTransformer):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.force_mask = False
         self.keep_ratio = None
-        self.set_keep_index = None
+        self.keep_index = None
 
     def set_force_mask(self, force):
         self.force_mask = force
@@ -40,7 +41,16 @@ class RandomMaskedVisionTransformer(VisionTransformer):
         self.keep_ratio = kr
 
         num_patches = self.patch_embed.num_patches
-        keep_index = torch.randperm(num_patches)[:int(num_patches * self.keep_ratio)]
+
+        _assert(kr==0.5, f"keep ration must be 0.5 for now")
+        keep_index = torch.arange(int(num_patches * self.keep_ratio))
+        _assert(num_patches == 14*14, f"num_tokens must be 14*14 for now")
+        index = 0
+        for i in range(14):
+            for j in range(14):
+                if (i+j)%2 == 0:
+                    keep_index[index] = i*14+j
+                    index += 1
         if self.dist_token is None:
             num_tokens = 1
         else:
@@ -71,9 +81,59 @@ class RandomMaskedVisionTransformer(VisionTransformer):
             return x[:, 0], x[:, 1]
 
 
+class UnstructuredMaskedVisionTransformer(VisionTransformer):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.force_mask = False
+        self.keep_ratio = None
+        self.keep_index = None
+
+    def set_force_mask(self, force):
+        self.force_mask = force
+
+    def set_keep_ratio(self, kr, index=None):
+        _assert(kr > 0 and kr <= 1.0, f"Keep_ratio must be within (0, 1]")
+        self.keep_ratio = kr
+
+        if index is None:
+            num_patches = self.patch_embed.num_patches
+            keep_index = torch.randperm(num_patches)[:int(num_patches * self.keep_ratio)]
+            if self.dist_token is None:
+                num_tokens = 1
+            else:
+                num_tokens = 2
+            keep_index = keep_index + num_tokens
+            keep_index = torch.cat((torch.arange(num_tokens), keep_index))
+            self.keep_index = keep_index
+        else:
+            self.keep_index = index
+        return self.keep_index
+
+    def forward_features(self, x):
+        x = self.patch_embed(x)
+        cls_token = self.cls_token.expand(x.shape[0], -1, -1)  # stole cls_tokens impl from Phil Wang, thanks
+        if self.dist_token is None:
+            x = torch.cat((cls_token, x), dim=1)
+        else:
+            x = torch.cat((cls_token, self.dist_token.expand(x.shape[0], -1, -1), x), dim=1)
+        # x = self.pos_drop(x + self.pos_embed)
+        x = x + self.pos_embed
+
+        if (self.force_mask or self.training) and self.keep_ratio < 1.0:
+            x = x[:, self.keep_index]
+
+        x = self.blocks(x)
+        x = self.norm(x)
+        if self.dist_token is None:
+            return self.pre_logits(x[:, 0])
+        else:
+            return x[:, 0], x[:, 1]
+
+
 class MaskedVisionTransformer(VisionTransformer):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+
         self.force_mask = False
         self.keep_ratio = 1.0
 
@@ -201,13 +261,27 @@ def masked_deit_small_patch16_224(pretrained=False, **kwargs):
 
 @register_model
 def random_masked_deit_small_patch16_224(pretrained=False, **kwargs):
-    model = RandomMaskedVisionTransformer(
+    model = UnstructuredMaskedVisionTransformer(
         patch_size=16, embed_dim=384, depth=12, num_heads=6, mlp_ratio=4, qkv_bias=True,
         norm_layer=partial(nn.LayerNorm, eps=1e-6), **kwargs)
     model.default_cfg = _cfg()
     if pretrained:
         checkpoint = torch.hub.load_state_dict_from_url(
-            url="https://dl.fbaipublicfiles.com/deit/random_masked_deit_small_patch16_224-cd65a155.pth",
+            url="https://dl.fbaipublicfiles.com/deit/unstructured_masked_deit_small_patch16_224-cd65a155.pth",
+            map_location="cpu", check_hash=True
+        )
+        model.load_state_dict(checkpoint["model"])
+    return model
+
+@register_model
+def structured_masked_deit_small_patch16_224(pretrained=False, **kwargs):
+    model = StructuredMaskedVisionTransformer(
+        patch_size=16, embed_dim=384, depth=12, num_heads=6, mlp_ratio=4, qkv_bias=True,
+        norm_layer=partial(nn.LayerNorm, eps=1e-6), **kwargs)
+    model.default_cfg = _cfg()
+    if pretrained:
+        checkpoint = torch.hub.load_state_dict_from_url(
+            url="https://dl.fbaipublicfiles.com/deit/structured_masked_deit_small_patch16_224-cd65a155.pth",
             map_location="cpu", check_hash=True
         )
         model.load_state_dict(checkpoint["model"])
