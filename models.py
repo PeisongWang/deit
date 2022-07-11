@@ -62,13 +62,14 @@ class StructuredMaskedVisionTransformer(VisionTransformer):
 
     def forward_features(self, x):
         x = self.patch_embed(x)
+        # x = self.pos_drop(x + self.pos_embed)
+        x = x + self.pos_embed
+
         cls_token = self.cls_token.expand(x.shape[0], -1, -1)  # stole cls_tokens impl from Phil Wang, thanks
         if self.dist_token is None:
             x = torch.cat((cls_token, x), dim=1)
         else:
             x = torch.cat((cls_token, self.dist_token.expand(x.shape[0], -1, -1), x), dim=1)
-        # x = self.pos_drop(x + self.pos_embed)
-        x = x + self.pos_embed
 
         if (self.force_mask or self.training) and self.keep_ratio < 1.0:
             x = x[:, self.keep_index]
@@ -111,13 +112,14 @@ class UnstructuredMaskedVisionTransformer(VisionTransformer):
 
     def forward_features(self, x):
         x = self.patch_embed(x)
+        # x = self.pos_drop(x + self.pos_embed)
+        x = x + self.pos_embed
+
         cls_token = self.cls_token.expand(x.shape[0], -1, -1)  # stole cls_tokens impl from Phil Wang, thanks
         if self.dist_token is None:
             x = torch.cat((cls_token, x), dim=1)
         else:
             x = torch.cat((cls_token, self.dist_token.expand(x.shape[0], -1, -1), x), dim=1)
-        # x = self.pos_drop(x + self.pos_embed)
-        x = x + self.pos_embed
 
         if (self.force_mask or self.training) and self.keep_ratio < 1.0:
             x = x[:, self.keep_index]
@@ -146,13 +148,14 @@ class MaskedVisionTransformer(VisionTransformer):
 
     def forward_features(self, x):
         x = self.patch_embed(x)
+        # x = self.pos_drop(x + self.pos_embed)
+        x = x + self.pos_embed
+
         cls_token = self.cls_token.expand(x.shape[0], -1, -1)  # stole cls_tokens impl from Phil Wang, thanks
         if self.dist_token is None:
             x = torch.cat((cls_token, x), dim=1)
         else:
             x = torch.cat((cls_token, self.dist_token.expand(x.shape[0], -1, -1), x), dim=1)
-        # x = self.pos_drop(x + self.pos_embed)
-        x = x + self.pos_embed
 
         if (self.force_mask or self.training) and self.keep_ratio < 1.0:
             num_patches = self.patch_embed.num_patches

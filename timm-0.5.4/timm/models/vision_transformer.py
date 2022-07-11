@@ -27,6 +27,7 @@ import logging
 from functools import partial
 from collections import OrderedDict
 from copy import deepcopy
+import numpy as np
 
 import torch
 import torch.nn as nn
