@@ -107,7 +107,7 @@ class UnstructuredMaskedVisionTransformer(VisionTransformer):
             keep_index = torch.cat((torch.arange(num_tokens), keep_index))
             self.keep_index = keep_index
         else:
-            self.keep_index = index
+            self.keep_index = torch.from_numpy(index).cuda()
         return self.keep_index
 
     def forward_features(self, x):
