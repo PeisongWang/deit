@@ -283,8 +283,8 @@ def main(args):
                 print(f"Removing key {k} from pretrained checkpoint")
                 del checkpoint_model[k]
 
-        # interpolate position embedding
         if not args.sinusoid_pos_emb:
+        # interpolate position embedding
             pos_embed_checkpoint = checkpoint_model['pos_embed']
             embedding_size = pos_embed_checkpoint.shape[-1]
             num_patches = model.patch_embed.num_patches
