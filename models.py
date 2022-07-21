@@ -14,7 +14,7 @@ __all__ = [
     'deit_tiny_patch16_224', 'deit_small_patch16_224', 'deit_base_patch16_224',
     'deit_tiny_distilled_patch16_224', 'deit_small_distilled_patch16_224',
     'deit_base_distilled_patch16_224', 'deit_base_patch16_384',
-    'deit_base_distilled_patch16_384',
+    'deit_base_distilled_patch16_384', 'deit_small_patch16_160',
     'masked_deit_small_patch16_224', 'unstructured_masked_deit_small_patch16_224', 'structured_masked_deit_small_patch16_224'
 ]
 
@@ -240,6 +240,21 @@ def deit_tiny_patch16_224(pretrained=False, **kwargs):
     if pretrained:
         checkpoint = torch.hub.load_state_dict_from_url(
             url="https://dl.fbaipublicfiles.com/deit/deit_tiny_patch16_224-a1311bcf.pth",
+            map_location="cpu", check_hash=True
+        )
+        model.load_state_dict(checkpoint["model"])
+    return model
+
+
+@register_model
+def deit_small_patch16_160(pretrained=False, **kwargs):
+    model = VisionTransformer(
+        patch_size=16, embed_dim=384, depth=12, num_heads=6, mlp_ratio=4, qkv_bias=True,
+        norm_layer=partial(nn.LayerNorm, eps=1e-6), **kwargs)
+    model.default_cfg = _cfg()
+    if pretrained:
+        checkpoint = torch.hub.load_state_dict_from_url(
+            url="https://dl.fbaipublicfiles.com/deit/deit_small_patch16_160-cd65a155.pth",
             map_location="cpu", check_hash=True
         )
         model.load_state_dict(checkpoint["model"])
