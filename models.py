@@ -249,7 +249,7 @@ def deit_tiny_patch16_224(pretrained=False, **kwargs):
 @register_model
 def deit_small_patch16_160(pretrained=False, **kwargs):
     model = VisionTransformer(
-        patch_size=16, embed_dim=384, depth=12, num_heads=6, mlp_ratio=4, qkv_bias=True,
+        img_size=160, patch_size=16, embed_dim=384, depth=12, num_heads=6, mlp_ratio=4, qkv_bias=True,
         norm_layer=partial(nn.LayerNorm, eps=1e-6), **kwargs)
     model.default_cfg = _cfg()
     if pretrained:
